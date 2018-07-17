@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
-	"os"
 	"strings"
 	"time"
 )
@@ -20,17 +19,26 @@ type HTTP struct {
 	account          string
 	key              []byte
 	dumpSessions     bool
+	client           *http.Client
 }
 
 func NewHTTP(storageType string, account string, key []byte, dumpSessions bool) *HTTP {
-	http := &HTTP{account: account, key: key, dumpSessions: dumpSessions}
-	http.baseURL = "https://" + account + "." + storageType + ".core.windows.net/"
-	http.secondaryBaseURL = "https://" + account + "-secondary." + storageType + ".core.windows.net/"
+	h := &HTTP{account: account, key: key, dumpSessions: dumpSessions}
+	h.baseURL = "https://" + account + "." + storageType + ".core.windows.net/"
+	h.secondaryBaseURL = "https://" + account + "-secondary." + storageType + ".core.windows.net/"
+	h.client = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        500,
+			MaxIdleConnsPerHost: 250,
+			TLSHandshakeTimeout: 15 * time.Second,
+		},
+		Timeout: 30 * time.Second,
+	}
 
-	return http
+	return h
 }
 
-func (storagehttp *HTTP) Request(httpVerb string, target string, query string, json []byte, useIfMatch bool, useAccept bool, useContentTypeXML bool, useSecondary bool) ([]byte, int) {
+func (storagehttp *HTTP) Request(httpVerb string, target string, query string, json []byte, useIfMatch bool, useAccept bool, useContentTypeXML bool, useSecondary bool) ([]byte, *http.Header, error) {
 	xmsdate, Authentication := storagehttp.calculateDateAndAuthentication(target)
 
 	baseURL := ""
@@ -40,7 +48,7 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 		baseURL = storagehttp.baseURL
 	}
 
-	client := &http.Client{}
+	client := storagehttp.client
 	request, _ := http.NewRequest(httpVerb, baseURL+target+query, bytes.NewBuffer(json))
 
 	if json != nil {
@@ -66,9 +74,9 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 
 	response, err := client.Do(request)
 	if err != nil {
-		fmt.Printf("%s", err)
-		os.Exit(1)
+		return nil, nil, err
 	}
+	defer response.Body.Close()
 
 	if storagehttp.dumpSessions {
 		responseDump, _ := httputil.DumpResponse(response, true)
@@ -81,11 +89,10 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		fmt.Printf("%s", err)
-		os.Exit(1)
+		return nil, nil, err
 	}
 
-	return contents, response.StatusCode
+	return contents, &response.Header, nil
 }
 
 func (storagehttp *HTTP) calculateDateAndAuthentication(target string) (string, string) {
