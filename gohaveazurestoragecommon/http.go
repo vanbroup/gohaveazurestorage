@@ -28,11 +28,11 @@ func NewHTTP(storageType string, account string, key []byte, dumpSessions bool) 
 	h.secondaryBaseURL = "https://" + account + "-secondary." + storageType + ".core.windows.net/"
 	h.client = &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        500,
-			MaxIdleConnsPerHost: 250,
-			TLSHandshakeTimeout: 15 * time.Second,
+			MaxIdleConns:        2000,
+			MaxIdleConnsPerHost: 2000,
+			TLSHandshakeTimeout: 10 * time.Second,
 		},
-		Timeout: 30 * time.Second,
+		Timeout: 15 * time.Second,
 	}
 
 	return h
@@ -89,7 +89,7 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return nil, nil, err
+		return nil, http.StatusUnprocessableEntity
 	}
 
 	return contents, &response.Header, nil
