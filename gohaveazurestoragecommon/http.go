@@ -89,7 +89,7 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return nil, nil, http.StatusUnprocessableEntity
+		return nil, nil, err
 	}
 
 	return contents, &response.Header, nil

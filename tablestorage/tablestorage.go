@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/cenkalti/backoff"
-	"github.com/ChristianHenrikReich/gohaveazurestorage/gohaveazurestoragecommon"
+	"github.com/vanbroup/gohaveazurestorage/gohaveazurestoragecommon"
 )
 
 type TableStorage struct {
