@@ -3,10 +3,11 @@ package gohaveazurestorage
 import (
 	"encoding/json"
 	"fmt"
-	"gohaveazurestorage/gohaveazurestoragecommon"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/vanbroup/gohaveazurestorage/gohaveazurestoragecommon"
 )
 
 var Key = ""
