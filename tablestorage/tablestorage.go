@@ -235,7 +235,16 @@ func (q *Query) getNext() {
 				ticker := backoff.NewTicker(exp)
 				for range ticker.C {
 					filter := strings.Replace(q.filter, " ", "%20", -1)
-					result, header, err := q.ts.http.Request("GET", q.table, "?$filter="+filter+"&$select="+q.selects+"&$top="+q.top, nil, false, true, false, false)
+
+					var next string
+					if q.nextRowKey != "" {
+						next = next + "&NextRowKey=" + q.nextRowKey
+					}
+					if q.nextPartitionKey != "" {
+						next = next + "&NextPartitionKey=" + q.nextPartitionKey
+					}
+
+					result, header, err := q.ts.http.Request("GET", q.table, "?$filter="+filter+"&$select="+q.selects+"&$top="+q.top+next, nil, false, true, false, false)
 					if err != nil {
 						q.lastError = fmt.Errorf("%s, retry in %s", err, exp.NextBackOff())
 						continue
@@ -254,6 +263,9 @@ func (q *Query) getNext() {
 					}
 
 					if header != nil {
+						if q.nextRowKey == header.Get("X-Ms-Continuation-Nextrowkey") {
+							q.lastError = fmt.Errorf("nextRowKey did not change, retry in %s", exp.NextBackOff())
+						}
 						q.nextPartitionKey = header.Get("X-Ms-Continuation-Nextpartitionkey")
 						q.nextRowKey = header.Get("X-Ms-Continuation-Nextrowkey")
 					}
