@@ -211,7 +211,7 @@ func (q *Query) Close() {
 }
 
 func (q *Query) Next(result interface{}) (more bool) {
-	go q.run.Do(q.getNext)
+	q.run.Do(q.getNext)
 
 	r, more := <-q.rows
 	if !more {
@@ -227,50 +227,52 @@ func (q *Query) Next(result interface{}) (more bool) {
 }
 
 func (q *Query) getNext() {
-	for {
-		select {
-		default:
-			exp := backoff.NewExponentialBackOff()
-			ticker := backoff.NewTicker(exp)
-			for range ticker.C {
-				filter := strings.Replace(q.filter, " ", "%20", -1)
-				result, header, err := q.ts.http.Request("GET", q.table, "?$filter="+filter+"&$select="+q.selects+"&$top="+q.top, nil, false, true, false, false)
-				if err != nil {
-					q.lastError = fmt.Errorf("%s, retry in %s", err, exp.NextBackOff())
-					continue
-				}
-
-				if result != nil && len(result) > 0 {
-					var resp entitiesResponse
-					if err := json.Unmarshal(result, &resp); err != nil {
+	go func() {
+		for {
+			select {
+			default:
+				exp := backoff.NewExponentialBackOff()
+				ticker := backoff.NewTicker(exp)
+				for range ticker.C {
+					filter := strings.Replace(q.filter, " ", "%20", -1)
+					result, header, err := q.ts.http.Request("GET", q.table, "?$filter="+filter+"&$select="+q.selects+"&$top="+q.top, nil, false, true, false, false)
+					if err != nil {
 						q.lastError = fmt.Errorf("%s, retry in %s", err, exp.NextBackOff())
 						continue
 					}
 
-					for _, r := range resp.Value {
-						q.rows <- r
+					if result != nil && len(result) > 0 {
+						var resp entitiesResponse
+						if err := json.Unmarshal(result, &resp); err != nil {
+							q.lastError = fmt.Errorf("%s, retry in %s", err, exp.NextBackOff())
+							continue
+						}
+
+						for _, r := range resp.Value {
+							q.rows <- r
+						}
 					}
+
+					if header != nil {
+						q.nextPartitionKey = header.Get("X-Ms-Continuation-Nextpartitionkey")
+						q.nextRowKey = header.Get("X-Ms-Continuation-Nextrowkey")
+					}
+
+					// end of backoff retry loop
+					break
 				}
 
-				if header != nil {
-					q.nextPartitionKey = header.Get("X-Ms-Continuation-Nextpartitionkey")
-					q.nextRowKey = header.Get("X-Ms-Continuation-Nextrowkey")
-				}
-
-				// end of backoff retry loop
+			case <-q.close:
 				break
 			}
 
-		case <-q.close:
-			break
+			if q.nextPartitionKey == "" || q.nextRowKey == "" {
+				break
+			}
 		}
 
-		if q.nextPartitionKey == "" || q.nextRowKey == "" {
-			break
-		}
-	}
-
-	close(q.rows)
+		close(q.rows)
+	}()
 }
 
 func desrializeXML(bytes []byte, object interface{}) {
