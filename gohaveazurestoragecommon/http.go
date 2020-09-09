@@ -53,7 +53,6 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 
 	if json != nil {
 		request.Header.Set("Content-Type", "application/json")
-		request.Header.Set("Content-Length", string(len(json)))
 	}
 
 	if useContentTypeXML {
