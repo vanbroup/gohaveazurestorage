@@ -49,7 +49,10 @@ func (storagehttp *HTTP) Request(httpVerb string, target string, query string, j
 	}
 
 	client := storagehttp.client
-	request, _ := http.NewRequest(httpVerb, baseURL+target+query, bytes.NewBuffer(json))
+	request, err := http.NewRequest(httpVerb, baseURL+target+query, bytes.NewBuffer(json))
+	if err != nil {
+		return nil, nil, err
+	}
 
 	if json != nil {
 		request.Header.Set("Content-Type", "application/json")
